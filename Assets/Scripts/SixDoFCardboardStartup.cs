@@ -1,0 +1,160 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+
+using UnityEngine;
+using UnityEngine.XR;
+using TMPro;
+
+namespace Google.XR.Cardboard
+{
+    /// <summary>
+    /// Initializes Cardboard XR Plugin for 6DoF use.
+    /// </summary>
+    public class SixDoFCardboardStartup : MonoBehaviour
+    {
+        private static IntPtr _inputPointer;
+        public static IntPtr inputPointer
+        {
+            get { if (isStarted) { return _inputPointer; } else { return IntPtr.Zero; } }
+            set { _inputPointer = value; }
+        }
+
+        private static IntPtr _displayPointer;
+        public static IntPtr displayPointer
+        {
+            get { if (isStarted) { return _displayPointer; } else { return IntPtr.Zero; } }
+            set { _displayPointer = value; }
+        }
+
+        private XRLoader loader;
+
+        public static bool isInitialized = false;
+        public static bool isStarted = false;
+
+        private string inputMatch = "Input";
+
+        private void Start()
+        {
+            //StartCardboard();
+        }
+        private bool vrstate = false;
+        public void startvr()
+        {
+            if (vrstate)
+            {
+                //Debug.Log("str");
+                vrstate = false;
+                this.GetComponent<TMP_Text>().text = "VR";
+                //StopCardboard();
+            }
+            else
+            {
+                Debug.Log("stp");
+                vrstate = true;
+                this.GetComponent<TMP_Text>().text = "AR";
+                StartCardboard();
+            }
+        }
+
+        public void StartCardboard()
+        {
+            // Configures the app to not shut down the screen and sets the brightness to maximum.
+            // Brightness control is expected to work only in iOS, see:
+            // https://docs.unity3d.com/ScriptReference/Screen-brightness.html.
+            Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            Screen.brightness = 1.0f;
+
+            Application.targetFrameRate = 60;
+
+            if (!loader)
+            {
+                loader = ScriptableObject.CreateInstance<XRLoader>();
+            }
+#if !UNITY_EDITOR
+            loader.Initialize();
+#endif
+            loader.Start();
+            ConnectCardboardInputSystem();
+
+            isStarted = true;
+
+            ReloadDeviceParams();
+
+            // Checks if the device parameters are stored and scans them if not.
+            if (!Api.HasDeviceParams())
+            {
+                Api.ScanDeviceParams();
+            }
+        }
+
+        public void StopCardboard()
+        {
+            if (loader)
+            {
+                loader.Stop();
+                loader.Deinitialize();
+            }
+            isStarted = false;
+        }
+
+        public void ReloadDeviceParams()
+        {
+            if (!isStarted)
+            {
+                return;
+            }
+            Api.ReloadDeviceParams();
+        }
+
+        public void Update()
+        {
+            if (!isStarted)
+            {
+                return;
+            }
+
+            if (Api.IsGearButtonPressed)
+            {
+                Api.ScanDeviceParams();
+            }
+
+            if (Api.IsCloseButtonPressed)
+            {
+                //Application.Quit();
+                Debug.Log("str");
+                vrstate = false;
+                this.GetComponent<TMP_Text>().text = "VR";
+                StopCardboard();
+            }
+
+            if (Api.HasNewDeviceParams())
+            {
+                Api.ReloadDeviceParams();
+            }
+#if !UNITY_EDITOR
+            Api.UpdateScreenParams();
+#endif
+        }
+
+        private void ConnectCardboardInputSystem()
+        {
+            List<XRInputSubsystemDescriptor> inputs = new List<XRInputSubsystemDescriptor>();
+            SubsystemManager.GetSubsystemDescriptors(inputs);
+
+            foreach (var d in inputs)
+            {
+                if (d.id.Equals(inputMatch))
+                {
+                    XRInputSubsystem inputInst = d.Create();
+
+                    if (inputInst != null)
+                    {
+                        GCHandle handle = GCHandle.Alloc(inputInst);
+                        inputPointer = GCHandle.ToIntPtr(handle);
+                    }
+                }
+            }
+        }
+    }
+}
